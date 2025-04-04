@@ -4,11 +4,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
-import geopandas as gpd  # For future use
-from sklearn.preprocessing import StandardScaler, MinMaxScaler  # For future use
-from sklearn.cluster import KMeans  # For future use
-from sklearn.linear_model import LogisticRegression  # For future use
-import statsmodels.api as sm  # For future use
+import geopandas as gpd
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.cluster import KMeans
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+import statsmodels.api as sm
+
+# Required packages installation:
+# pip install scikit-learn  # instead of sklearn
+# pip install statsmodels
+# pip install geopandas
+# pip install streamlit
+# pip install pandas numpy matplotlib seaborn
 
 # Define constants for column names
 NUMERIC_COLUMNS = ['normalized-losses', 'bore', 'stroke', 'horsepower', 'peak-rpm', 'price']
@@ -714,18 +722,355 @@ def show_geographic_distribution():
         st.error(f"A apărut o eroare la încărcarea datelor geografice: {str(e)}")
         st.info("Vă rugăm să verificați conexiunea la internet și să încercați din nou.")
 
-# Modeling section functions (placeholders for future implementation)
+# Modeling section functions
 def show_clustering():
-    st.markdown("<h3>Clusterizare</h3>", unsafe_allow_html=True)
-    st.write("Această secțiune va fi implementată ulterior pentru a include analiza clusterizării.")
+    st.markdown("<h3>Clusterizare K-means</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="highlight-box">
+    <p>Clusterizarea K-means este o metodă de învățare nesupervizată care grupează datele în k clustere. 
+    Vom analiza automobilele folosind caracteristici numerice relevante pentru a identifica grupuri naturale de mașini cu caracteristici similare.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Select features for clustering
+    features_for_clustering = ['engine-size', 'horsepower', 'price', 'curb-weight']
+    
+    # Prepare data - handle missing values first
+    X = st.session_state.processed_data[features_for_clustering].copy()
+    
+    # Replace '?' with NaN
+    X = X.replace('?', np.nan)
+    
+    # Convert to numeric
+    for col in X.columns:
+        X[col] = pd.to_numeric(X[col], errors='coerce')
+    
+    # Fill missing values with median
+    for col in X.columns:
+        X[col].fillna(X[col].median(), inplace=True)
+    
+    # Scale the data
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    # Select number of clusters
+    n_clusters = st.slider("Selectati numarul de clustere", 2, 6, 3)
+    
+    # Apply K-means
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    clusters = kmeans.fit_predict(X_scaled)
+    
+    # Add clusters to original data
+    df_with_clusters = st.session_state.processed_data.copy()
+    df_with_clusters['Cluster'] = clusters
+    
+    # Display results
+    st.markdown("<h4>Distributia automobilelor pe clustere</h4>", unsafe_allow_html=True)
+    
+    # Calculate statistics for each cluster
+    cluster_stats = pd.DataFrame()
+    for cluster in range(n_clusters):
+        cluster_data = df_with_clusters[df_with_clusters['Cluster'] == cluster][features_for_clustering]
+        # Convert to numeric and handle missing values
+        for col in cluster_data.columns:
+            cluster_data[col] = pd.to_numeric(cluster_data[col].replace('?', np.nan), errors='coerce')
+            cluster_data[col].fillna(cluster_data[col].median(), inplace=True)
+        
+        # Calculate mean and std for each feature
+        cluster_mean = cluster_data.mean()
+        cluster_std = cluster_data.std()
+        
+        # Add to stats DataFrame
+        cluster_stats[f'Cluster_{cluster}_mean'] = cluster_mean
+        cluster_stats[f'Cluster_{cluster}_std'] = cluster_std
+    
+    # Display statistics
+    st.dataframe(cluster_stats.round(2))
+    
+    # Interpret cluster characteristics
+    st.markdown("""
+    <div class="highlight-box">
+    <h4>Interpretarea clusterelor:</h4>
+    <ul>
+        <li>Fiecare cluster reprezinta un grup distinct de masini cu caracteristici similare</li>
+        <li>Valorile medii si deviatiile standard ne ajuta sa intelegem distributia caracteristicilor in fiecare cluster</li>
+        <li>Clusterul cu pret mediu mai mare poate fi asociat cu masini de lux</li>
+        <li>Clusterul cu putere si dimensiune motor mai mari poate fi asociat cu masini sport</li>
+    </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Visualize clusters
+    fig, ax = plt.subplots(figsize=(10, 6))
+    scatter = ax.scatter(X_scaled[:, 0], X_scaled[:, 1], c=clusters, cmap='viridis')
+    ax.set_xlabel('Engine Size (standardizat)')
+    ax.set_ylabel('Horsepower (standardizat)')
+    ax.set_title('Vizualizare clustere K-means')
+    plt.colorbar(scatter, label='Cluster')
+    st.pyplot(fig)
+    
+    # Display examples from each cluster
+    st.markdown("<h4>Exemple de masini din fiecare cluster</h4>", unsafe_allow_html=True)
+    for cluster in range(n_clusters):
+        st.markdown(f"**Cluster {cluster}:**")
+        # Afisam doar coloanele existente
+        display_columns = ['make'] + features_for_clustering
+        cluster_cars = df_with_clusters[df_with_clusters['Cluster'] == cluster][display_columns].head()
+        # Convert numeric columns for display
+        for col in features_for_clustering:
+            cluster_cars[col] = pd.to_numeric(cluster_cars[col].replace('?', np.nan), errors='coerce')
+            cluster_cars[col].fillna(cluster_cars[col].median(), inplace=True)
+        st.dataframe(cluster_cars.round(2))
 
 def show_logistic_regression():
-    st.markdown("<h3>Regresie Logistică</h3>", unsafe_allow_html=True)
-    st.write("Această secțiune va fi implementată ulterior pentru a include analiza regresiei logistice.")
+    st.markdown("<h3>Regresie Logistica</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="highlight-box">
+    <p>Regresia logistica va fi folosita pentru a prezice daca o masina este de lux sau nu, 
+    bazandu-ne pe caracteristicile sale. O masina este considerata de lux daca pretul sau este peste media + o deviatie standard.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Prepare data
+    df = st.session_state.processed_data.copy()
+    
+    # Convert price to numeric and handle missing values
+    df['price'] = pd.to_numeric(df['price'].replace('?', np.nan), errors='coerce')
+    df['price'].fillna(df['price'].median(), inplace=True)
+    
+    # Define luxury cars
+    price_mean = df['price'].mean()
+    price_std = df['price'].std()
+    luxury_threshold = price_mean + price_std
+    
+    # Create target variable
+    y = (df['price'] > luxury_threshold).astype(int)
+    
+    # Select features for prediction
+    features = ['engine-size', 'horsepower', 'curb-weight', 'wheel-base', 'length']
+    
+    # Convert features to numeric and handle missing values
+    X = df[features].copy()
+    for col in X.columns:
+        X[col] = pd.to_numeric(X[col].replace('?', np.nan), errors='coerce')
+        X[col].fillna(X[col].median(), inplace=True)
+    
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Train model
+    model = LogisticRegression(random_state=42)
+    model.fit(X_train, y_train)
+    
+    # Evaluate model
+    train_score = model.score(X_train, y_train)
+    test_score = model.score(X_test, y_test)
+    
+    st.markdown("<h4>Performanta modelului</h4>", unsafe_allow_html=True)
+    st.write(f"Precizia pe setul de antrenare: {train_score:.2%}")
+    st.write(f"Precizia pe setul de test: {test_score:.2%}")
+    
+    # Display feature importance
+    st.markdown("<h4>Importanta caracteristicilor</h4>", unsafe_allow_html=True)
+    feature_importance = pd.DataFrame({
+        'Caracteristica': features,
+        'Coeficient': model.coef_[0]
+    })
+    feature_importance = feature_importance.sort_values('Coeficient', key=abs, ascending=False)
+    st.dataframe(feature_importance)
+    
+    # Visualize feature importance
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(data=feature_importance, x='Coeficient', y='Caracteristica', ax=ax)
+    ax.set_title('Importanta caracteristicilor in predictia masinilor de lux')
+    st.pyplot(fig)
+    
+    # Add prediction section
+    st.markdown("<h4>Predictie pentru o masina noua</h4>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="highlight-box">
+    <p>Introduceti caracteristicile unei masini pentru a prezice daca este de lux sau nu.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Create input fields for each feature
+    col1, col2 = st.columns(2)
+    with col1:
+        engine_size = st.number_input('Dimensiune motor (cm³)', min_value=0.0, value=float(X['engine-size'].mean()))
+        horsepower = st.number_input('Putere (CP)', min_value=0.0, value=float(X['horsepower'].mean()))
+        curb_weight = st.number_input('Greutate (kg)', min_value=0.0, value=float(X['curb-weight'].mean()))
+    
+    with col2:
+        wheel_base = st.number_input('Distanta intre punți (inch)', min_value=0.0, value=float(X['wheel-base'].mean()))
+        length = st.number_input('Lungime (inch)', min_value=0.0, value=float(X['length'].mean()))
+    
+    # Create prediction button
+    if st.button('Prezice daca masina este de lux'):
+        # Prepare input data
+        input_data = pd.DataFrame({
+            'engine-size': [engine_size],
+            'horsepower': [horsepower],
+            'curb-weight': [curb_weight],
+            'wheel-base': [wheel_base],
+            'length': [length]
+        })
+        
+        # Make prediction
+        prediction = model.predict(input_data)[0]
+        probability = model.predict_proba(input_data)[0][1]
+        
+        # Display results
+        if prediction == 1:
+            st.success(f"Aceasta masina este prezisa ca fiind de lux (probabilitate: {probability:.2%})")
+        else:
+            st.info(f"Aceasta masina nu este prezisa ca fiind de lux (probabilitate: {probability:.2%})")
+    
+    # Add interpretation
+    st.markdown("""
+    <div class="highlight-box">
+    <h4>Interpretarea rezultatelor:</h4>
+    <ul>
+        <li>Coeficientii pozitivi indica o relatie directa intre caracteristica si probabilitatea ca masina sa fie de lux</li>
+        <li>Coeficientii negativi indica o relatie inversa</li>
+        <li>Cu cat valoarea absoluta a coeficientului este mai mare, cu atat caracteristica are o influenta mai puternica</li>
+        <li>Precizia modelului ne indica cat de bine putem prezice daca o masina este de lux sau nu</li>
+    </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
 def show_multiple_regression():
-    st.markdown("<h3>Regresie Multiplă</h3>", unsafe_allow_html=True)
-    st.write("Această secțiune va fi implementată ulterior pentru a include analiza regresiei multiple.")
+    st.markdown("<h3>Regresie Multipla</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="highlight-box">
+    <p>Regresia multipla va fi folosita pentru a prezice pretul masinii bazandu-ne pe multiple caracteristici.
+    Aceasta analiza ne permite sa intelegem care caracteristici au cel mai mare impact asupra pretului.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Prepare data
+    df = st.session_state.processed_data.copy()
+    
+    # Select features for prediction
+    features = ['engine-size', 'horsepower', 'curb-weight', 'wheel-base', 'length', 'width', 'height']
+    
+    # Convert features to numeric and handle missing values
+    X = df[features].copy()
+    for col in X.columns:
+        X[col] = pd.to_numeric(X[col].replace('?', np.nan), errors='coerce')
+        X[col].fillna(X[col].median(), inplace=True)
+    
+    # Convert target variable to numeric and handle missing values
+    y = pd.to_numeric(df['price'].replace('?', np.nan), errors='coerce')
+    y.fillna(y.median(), inplace=True)
+    
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Add constant to X for regression
+    X_train_with_const = sm.add_constant(X_train)
+    X_test_with_const = sm.add_constant(X_test)
+    
+    # Train model
+    model = sm.OLS(y_train, X_train_with_const).fit()
+    
+    # Display results
+    st.markdown("<h4>Rezultatele regresiei</h4>", unsafe_allow_html=True)
+    st.write(model.summary().tables[0].as_html(), unsafe_allow_html=True)
+    
+    # Evaluate predictions
+    y_pred = model.predict(X_test_with_const)
+    mse = np.mean((y_test - y_pred) ** 2)
+    rmse = np.sqrt(mse)
+    r2 = model.rsquared
+    
+    st.markdown("<h4>Metrici de performanta</h4>", unsafe_allow_html=True)
+    st.write(f"R-squared: {r2:.4f}")
+    st.write(f"RMSE: {rmse:.2f} USD")
+    
+    # Visualize predictions vs actual values
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(y_test, y_pred, alpha=0.5)
+    ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+    ax.set_xlabel('Pret real (USD)')
+    ax.set_ylabel('Pret prezis (USD)')
+    ax.set_title('Predictii vs Valori reale')
+    st.pyplot(fig)
+    
+    # Display coefficients and p-values
+    st.markdown("<h4>Coefficienti si semnificatie statistica</h4>", unsafe_allow_html=True)
+    coef_df = pd.DataFrame({
+        'Caracteristica': ['Intercept'] + features,
+        'Coeficient': model.params,
+        'P-value': model.pvalues
+    })
+    coef_df = coef_df.sort_values('P-value')
+    st.dataframe(coef_df)
+    
+    # Visualize coefficients (excluding intercept)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    coef_df_no_intercept = coef_df[coef_df['Caracteristica'] != 'Intercept']
+    sns.barplot(data=coef_df_no_intercept, x='Coeficient', y='Caracteristica', ax=ax)
+    ax.set_title('Influenta caracteristicilor asupra pretului')
+    st.pyplot(fig)
+    
+    # Add prediction section
+    st.markdown("<h4>Predictie pret masina</h4>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="highlight-box">
+    <p>Introduceti caracteristicile unei masini pentru a prezice pretul sau.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Create input fields for each feature
+    col1, col2 = st.columns(2)
+    with col1:
+        engine_size = st.number_input('Dimensiune motor (cm³)', min_value=0.0, value=float(X['engine-size'].mean()))
+        horsepower = st.number_input('Putere (CP)', min_value=0.0, value=float(X['horsepower'].mean()))
+        curb_weight = st.number_input('Greutate (kg)', min_value=0.0, value=float(X['curb-weight'].mean()))
+        wheel_base = st.number_input('Distanta intre punți (inch)', min_value=0.0, value=float(X['wheel-base'].mean()))
+    
+    with col2:
+        length = st.number_input('Lungime (inch)', min_value=0.0, value=float(X['length'].mean()))
+        width = st.number_input('Latime (inch)', min_value=0.0, value=float(X['width'].mean()))
+        height = st.number_input('Inaltime (inch)', min_value=0.0, value=float(X['height'].mean()))
+    
+    # Create prediction button
+    if st.button('Prezice pretul masinii'):
+        # Prepare input data
+        input_data = pd.DataFrame({
+            'const': [1.0],  # Add constant term first
+            'engine-size': [engine_size],
+            'horsepower': [horsepower],
+            'curb-weight': [curb_weight],
+            'wheel-base': [wheel_base],
+            'length': [length],
+            'width': [width],
+            'height': [height]
+        })
+        
+        # Make prediction
+        predicted_price = model.predict(input_data)[0]
+        
+        # Display results
+        st.success(f"Pretul estimat al masinii este: ${predicted_price:,.2f}")
+        
+        # Show confidence interval
+        prediction_interval = model.get_prediction(input_data).conf_int(alpha=0.05)
+        st.info(f"Interval de incredere 95%: ${prediction_interval[0][0]:,.2f} - ${prediction_interval[0][1]:,.2f}")
+    
+    # Add interpretation
+    st.markdown("""
+    <div class="highlight-box">
+    <h4>Interpretarea rezultatelor:</h4>
+    <ul>
+        <li>R-squared ne indica proportia variatiei in pret care poate fi explicata de caracteristicile selectate</li>
+        <li>RMSE ne indica eroarea medie in predictia pretului in dolari</li>
+        <li>P-values mai mici de 0.05 indica o relatie statistica semnificativa intre caracteristica si pret</li>
+        <li>Coeficientii pozitivi indica o relatie directa intre caracteristica si pret</li>
+        <li>Coeficientii negativi indica o relatie inversa</li>
+    </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
