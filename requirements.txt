@@ -1,0 +1,12 @@
+# Inainte de a instala pachetele, asigurati-va ca aveti instalat Microsoft Visual C++ Build Tools
+# Descarcati de aici: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+# Selectati "Desktop development with C++" in timpul instalarii
+
+scikit-learn==1.6.1
+statsmodels==0.14.1
+geopandas==0.14.1
+streamlit==1.31.1
+pandas==2.2.0
+numpy==1.26.3
+matplotlib==3.8.2
+seaborn==0.13.2 
